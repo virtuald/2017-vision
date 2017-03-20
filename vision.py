@@ -15,10 +15,15 @@ class ImageProcessor(object):
         Stuff here.
     '''
     
-    # Values for the lifecam-3000
-    VFOV = 45.6
-    HFOV = 61 # Camera's horizontal field of view
-    
+    if True:
+        # Values for the lifecam-3000
+        VFOV = 45.6
+        HFOV = 61 # Camera's horizontal field of view
+    else:
+        # Values for the Logitech C930e
+        VFOV = 61.9
+        HFOV = 77.3
+        
     VFOV_2 = VFOV / 2.0
     HFOV_2 = HFOV / 2.0
     
