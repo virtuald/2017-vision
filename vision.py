@@ -44,6 +44,12 @@ class ImageProcessor(object):
     # Green:
     # Blue:
     
+    # boston 2013: 30 75 188 255 16 255
+    # virginia 2014: ?
+    # test image:  43 100 0 255 57 255
+    
+    green_auto_threshold = ntproperty('/camera/green_auto_threshold', True, writeDefault=True)
+    
     thresh_hue_p = ntproperty('/camera/thresholds/hue_p', 0)
     thresh_hue_n = ntproperty('/camera/thresholds/hue_n', 255)
     thresh_sat_p = ntproperty('/camera/thresholds/sat_p', 145)
@@ -72,6 +78,9 @@ class ImageProcessor(object):
             self.bin = np.empty((h, w, 1), dtype=np.uint8)
             self.hsv = np.empty((h, w, 3), dtype=np.uint8)
             
+            self.subr = np.empty((h, w, 1), dtype=np.uint8)
+            self.addr = np.empty((h, w, 1), dtype=np.uint8)
+            
             # for drawing
             self.zeros = np.zeros((h, w, 1), dtype=np.bool)
             self.black = np.zeros((h, w, 3), dtype=np.uint8)
@@ -92,15 +101,31 @@ class ImageProcessor(object):
         
         self.preallocate(img)
         
-        # Convert to HSV
-        cv2.cvtColor(img, cv2.COLOR_BGR2HLS, dst=self.hsv)
-        
-        if self.tuning:
-            self.lower = np.array([self.thresh_hue_p, self.thresh_sat_p, self.thresh_val_p], dtype=np.uint8)
-            self.upper = np.array([self.thresh_hue_n, self.thresh_sat_n, self.thresh_val_n], dtype=np.uint8)
-        
-        # Threshold
-        cv2.inRange(self.hsv, self.lower, self.upper, dst=self.bin)
+        if not self.green_auto_threshold:
+            # Convert to HSV
+            cv2.cvtColor(img, cv2.COLOR_BGR2HLS, dst=self.hsv)
+            
+            if self.tuning:
+                self.lower = np.array([self.thresh_hue_p, self.thresh_sat_p, self.thresh_val_p], dtype=np.uint8)
+                self.upper = np.array([self.thresh_hue_n, self.thresh_sat_n, self.thresh_val_n], dtype=np.uint8)
+            
+            # Threshold
+            cv2.inRange(self.hsv, self.lower, self.upper, dst=self.bin)
+        else:
+            # experimental thresholding approach for green light rings from
+            # FRC 900 vision whitepaper:
+            # - Add blue and red channels
+            # - Subtract them from green
+            # - Run otsu's threshold on it and use that
+            
+            cv2.add(img[:,:,0], img[:,:,2], dst=self.addr)
+            cv2.subtract(img[:,:,1], self.addr, dst=self.subr)
+            
+            r,_ = cv2.threshold(self.subr, 0, 255,
+                                cv2.THRESH_BINARY+cv2.THRESH_OTSU,
+                                dst=self.bin)
+            if r < 1:
+                return self.out, None
         
         # Fill in the gaps
         cv2.morphologyEx(self.bin, cv2.MORPH_CLOSE, self.morphKernel, dst=self.bin,
