@@ -187,6 +187,7 @@ def main():
     # TODO: get rid of this boilerplate, or make it easier to do
     
     from cscore import CameraServer
+    from cscore.imagewriter import ImageWriter
     cs = CameraServer.getInstance()
     camera = cs.startAutomaticCapture()
     camera.setResolution(320, 240)
@@ -194,6 +195,7 @@ def main():
     outputStream = cs.putVideo("CV", 320, 240)
     
     proc = ImageProcessor()
+    writer = ImageWriter()
     
     enabled = None
     
@@ -215,6 +217,9 @@ def main():
                 camera.setExposureAuto()
         
         if enabled:
+            if proc.logging_enabled:
+                writer.setImage(img)
+            
             out, target = proc.process(img)
         else:
             out = img
