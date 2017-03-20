@@ -33,10 +33,11 @@ class ImageProcessor(object):
     BLUE = (255, 0, 0)
     MOO = (255, 255, 0)
     
-    enabled = ntproperty('/camera/enabled', True)
-    tuning = ntproperty('/camera/tuning', True)
+    enabled = ntproperty('/camera/enabled', False, writeDefault=True)
+    tuning = ntproperty('/camera/tuning', False, writeDefault=True)
+    logging_enabled = ntproperty('/camera/logging_enabled', False, writeDefault=True)
     
-    target = ntproperty('/camera/target', (0, 0, INF))
+    target = ntproperty('/camera/target', (0, 0, INF), writeDefault=True)
     
     # TODO:
     # Amber: 0,255 . 70/191 . 252/255?
@@ -52,7 +53,7 @@ class ImageProcessor(object):
     
     draw = ntproperty('/camera/draw_targets', True)
     draw_thresh = ntproperty('/camera/draw_thresh', False)
-    draw_c1 = ntproperty('/camera/draw_c1', True)
+    draw_c1 = ntproperty('/camera/draw_c1', False)
     
     def __init__(self):
         
