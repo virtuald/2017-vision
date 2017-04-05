@@ -34,9 +34,6 @@ class ImageProcessor(object):
     MOO = (255, 255, 0)
     
     enabled = ntproperty('/camera/enabled', False, writeDefault=True)
-    tuning = ntproperty('/camera/tuning', False, writeDefault=True)
-    logging_enabled = ntproperty('/camera/logging_enabled', False, writeDefault=True)
-    
     target = ntproperty('/camera/target', (0, 0, INF), writeDefault=True)
     
     # TODO:
@@ -48,24 +45,9 @@ class ImageProcessor(object):
     # virginia 2014: ?
     # test image:  43 100 0 255 57 255
     
-    green_auto_threshold = ntproperty('/camera/green_auto_threshold', True, writeDefault=True)
-    
-    thresh_hue_p = ntproperty('/camera/thresholds/hue_p', 0)
-    thresh_hue_n = ntproperty('/camera/thresholds/hue_n', 255)
-    thresh_sat_p = ntproperty('/camera/thresholds/sat_p', 145)
-    thresh_sat_n = ntproperty('/camera/thresholds/sat_n', 255)
-    thresh_val_p = ntproperty('/camera/thresholds/val_p', 80)
-    thresh_val_n = ntproperty('/camera/thresholds/val_n', 255)
-    
-    draw = ntproperty('/camera/draw_targets', True)
-    draw_thresh = ntproperty('/camera/draw_thresh', False)
-    draw_c1 = ntproperty('/camera/draw_c1', False)
-    
-    def __init__(self):
+    def __init__(self, props):
         
-        self.lower = np.array([self.thresh_hue_p, self.thresh_sat_p, self.thresh_val_p], dtype=np.uint8)
-        self.upper = np.array([self.thresh_hue_n, self.thresh_sat_n, self.thresh_val_n], dtype=np.uint8)
-        
+        self.props = props
         self.size = None
         
     
@@ -101,16 +83,15 @@ class ImageProcessor(object):
         
         self.preallocate(img)
         
-        if not self.green_auto_threshold:
+        if not self.props.green_auto_threshold:
             # Convert to HSV
             cv2.cvtColor(img, cv2.COLOR_BGR2HLS, dst=self.hsv)
             
-            if self.tuning:
-                self.lower = np.array([self.thresh_hue_p, self.thresh_sat_p, self.thresh_val_p], dtype=np.uint8)
-                self.upper = np.array([self.thresh_hue_n, self.thresh_sat_n, self.thresh_val_n], dtype=np.uint8)
+            lower = np.array([self.props.thresh_hue_p, self.props.thresh_sat_p, self.props.thresh_val_p], dtype=np.uint8)
+            upper = np.array([self.props.thresh_hue_n, self.props.thresh_sat_n, self.props.thresh_val_n], dtype=np.uint8)
             
             # Threshold
-            cv2.inRange(self.hsv, self.lower, self.upper, dst=self.bin)
+            cv2.inRange(self.hsv, lower, upper, dst=self.bin)
         else:
             # experimental thresholding approach for green light rings from
             # FRC 900 vision whitepaper:
@@ -131,7 +112,7 @@ class ImageProcessor(object):
         cv2.morphologyEx(self.bin, cv2.MORPH_CLOSE, self.morphKernel, dst=self.bin,
                          iterations=self.morphIterations)
         
-        if self.draw_thresh:
+        if self.props.draw_thresh:
             b = (self.bin != 0)
             cv2.copyMakeBorder(self.black, 0, 0, 0, 0, cv2.BORDER_CONSTANT, value=self.RED, dst=self.out)
             self.out[np.dstack((b, b, b))] = 255
@@ -155,7 +136,7 @@ class ImageProcessor(object):
             epsilon = 0.07 * cv2.arcLength(cnt, True)
             approx = cv2.approxPolyDP(cnt, epsilon, True)
             if len(approx) == 4:
-                if self.draw_c1:
+                if self.props.draw_c1:
                     cv2.drawContours(self.out, [approx], -1, self.BLUE, 2, lineType=8)
                 
                 # Compute and store data for later    
@@ -208,7 +189,7 @@ class ImageProcessor(object):
             results.sort(key=lambda r: abs(r['angle']))
             target = results[0]
 
-            if self.draw:
+            if self.props.draw_targets:
                 cv2.drawContours(self.out, [target['c']], -1, self.RED, 2, lineType=8)
         
         return self.out, target
@@ -225,7 +206,22 @@ def main():
     cvSink = cs.getVideo()
     outputStream = cs.putVideo("CV", 320, 240)
     
-    proc = ImageProcessor()
+    outputStream.createIntegerProperty("thresh_hue_p", 0, 255, 1, 0, 0)
+    outputStream.createIntegerProperty("thresh_hue_n", 0, 255, 1, 255, 255)
+    outputStream.createIntegerProperty("thresh_sat_p", 0, 255, 1, 145, 145)
+    outputStream.createIntegerProperty("thresh_sat_n", 0, 255, 1, 255, 255)
+    outputStream.createIntegerProperty("thresh_val_p", 0, 255, 1, 80, 80)
+    outputStream.createIntegerProperty("thresh_val_n", 0, 255, 1, 255, 255)
+    
+    outputStream.createBooleanProperty("draw_targets", True, True)
+    outputStream.createBooleanProperty("draw_thresh", False, False)
+    outputStream.createBooleanProperty("draw_c1", False, False)
+    outputStream.createBooleanProperty("green_auto_threshold", False, False)
+    
+    outputStream.createBooleanProperty("enabled", False, False)
+    outputStream.createStringProperty("angle", "Angle is!?")
+    
+    proc = ImageProcessor(outputStream.props)
     writer = ImageWriter()
     
     enabled = None
@@ -239,7 +235,7 @@ def main():
             # skip the rest of the current iteration
             continue
         
-        en = proc.enabled
+        en = outputStream.props.enabled or proc.enabled
         if en != enabled:
             enabled = en
             if enabled:
@@ -248,8 +244,8 @@ def main():
                 camera.setExposureAuto()
         
         if enabled:
-            if proc.logging_enabled:
-                writer.setImage(img)
+            #if proc.logging_enabled:
+            writer.setImage(img)
             
             out, target = proc.process(img)
         else:
